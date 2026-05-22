@@ -13,27 +13,45 @@ public class GraphService {
         this.repository = repository;
     }
 
-    // Сохранение ребра в БД
     public void addEdge(int src, int dst, String name) {
         repository.save(new Edge(src, dst, name));
+        repository.save(new Edge(dst, src, name));
     }
 
-    // Поиск путей длины K
     public List<List<Integer>> findPaths(String graphName, int k) {
         List<Edge> edges = repository.findByGraphName(graphName);
+        if (edges.isEmpty()) return new ArrayList<>();
 
-        // Строим список смежности из данных БД
         Map<Integer, List<Integer>> adj = new HashMap<>();
         for (Edge e : edges) {
             adj.computeIfAbsent(e.getSource(), v -> new ArrayList<>()).add(e.getTarget());
         }
 
-        // Тут логика поиска (та же, что мы обсуждали в C++)
-        // Для краткости вернем список всех ребер как стартовую точку
-        List<List<Integer>> result = new ArrayList<>();
+        List<List<Integer>> currentPaths = new ArrayList<>();
         for (Edge e : edges) {
-            result.add(Arrays.asList(e.getSource(), e.getTarget()));
+            List<Integer> path = new ArrayList<>();
+            path.add(e.getSource());
+            path.add(e.getTarget());
+            currentPaths.add(path);
         }
-        return result;
+
+        for (int i = 2; i < k; i++) {
+            List<List<Integer>> nextPaths = new ArrayList<>();
+            for (List<Integer> path : currentPaths) {
+                int lastNode = path.get(path.size() - 1);
+                List<Integer> neighbors = adj.getOrDefault(lastNode, new ArrayList<>());
+
+                for (Integer neighbor : neighbors) {
+                    if (!path.contains(neighbor)) {
+                        List<Integer> newPath = new ArrayList<>(path);
+                        newPath.add(neighbor);
+                        nextPaths.add(newPath);
+                    }
+                }
+            }
+            currentPaths = nextPaths;
+        }
+
+        return currentPaths;
     }
 }

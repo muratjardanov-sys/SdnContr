@@ -6,7 +6,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api")
-@CrossOrigin // Разрешает запросы с твоего будущего JS-фронтенда
+@CrossOrigin(origins = "*")
 public class GraphController {
     private final GraphService service;
 
@@ -17,7 +17,7 @@ public class GraphController {
     @PostMapping("/add")
     public String addEdge(@RequestParam int src, @RequestParam int dst, @RequestParam String name) {
         service.addEdge(src, dst, name);
-        return "Ребро добавлено!";
+        return "Ребро [" + src + " -> " + dst + "] добавлено в граф '" + name + "'";
     }
 
     @GetMapping("/paths")

@@ -1,10 +1,131 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <title>Логистический Менеджер: Неориентированный граф</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; height: 100vh; }
+        .sidebar { width: 350px; background: white; border-right: 1px solid #ddd; padding: 20px; z-index: 1000; overflow-y: auto; }
+        #map { flex-grow: 1; height: 100%; }
+        .panel { border: 1px solid #eee; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        input, button { width: 100%; padding: 10px; margin: 5px 0; border-radius: 4px; border: 1px solid #ccc; box-sizing: border-box; }
+        button { background: #1a73e8; color: white; border: none; cursor: pointer; font-weight: bold; }
+        button:hover { background: #1557b0; }
+        .active-mode { background: #34a853 !important; }
+        #output { font-size: 11px; background: #f8f9fa; padding: 10px; height: 150px; overflow-y: auto; border: 1px solid #eee; }
+    </style>
 </head>
 <body>
+
+<div class="sidebar">
+    <h2>🚚 Управление сетью</h2>
+
+    <div class="panel">
+        <h3>📍 Склады</h3>
+        <button id="addNodeBtn" onclick="toggleAddMode()">➕ Поставить склад на карту</button>
+        <p id="status" style="font-size: 12px; color: #666;"></p>
+    </div>
+
+    <div class="panel">
+        <h3>🛤 Дороги (Связи)</h3>
+        <input type="number" id="src" placeholder="ID склада А">
+        <input type="number" id="dst" placeholder="ID склада Б">
+        <button onclick="addRoute()">Создать дорогу</button>
+    </div>
+
+    <div class="panel">
+        <h3>📊 Расчет маршрутов</h3>
+        <input type="number" id="k" value="3" placeholder="Длина пути k">
+        <button onclick="getPaths()" style="background: #34a853;">Найти пути</button>
+    </div>
+
+    <div id="output">Логи...</div>
+</div>
+
+<div id="map"></div>
+
+<script>
+    const map = L.map('map').setView([49.5, 39.5], 6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+    let isAddMode = false;
+    let warehouseData = {};   // Данные: ID -> Координаты
+    let warehouseMarkers = {}; // Объекты маркеров на карте
+    let pathLines = [];       // Объекты линий на карте
+    function toggleAddMode() {
+        isAddMode = !isAddMode;
+        const btn = document.getElementById('addNodeBtn');
+        btn.classList.toggle('active-mode', isAddMode);
+        document.getElementById('status').innerText = isAddMode ? "Кликните на карту!" : "";
+    }
+    map.on('click', function(e) {
+        if (!isAddMode) return;
+        const lat = e.latlng.lat.toFixed(6);
+        const lng = e.latlng.lng.toFixed(6);
+        const id = prompt(`Координаты: ${lat}, ${lng}\nВведите ID склада:`);
+
+        if (id) {
+            warehouseData[id] = { coords: [lat, lng] };
+            const marker = L.marker([lat, lng])
+                .addTo(map)
+                .bindTooltip(`ID: ${id}`, { permanent: true, direction: 'top', offset: [0, -10] })
+                .bindPopup(`<b>Склад #${id}</b>`);
+
+            warehouseMarkers[id] = marker;
+            log(`Склад ${id} создан`);
+            toggleAddMode();
+        }
+    });
+
+    async function addRoute() {
+    const src = document.getElementById('src').value;
+    const dst = document.getElementById('dst').value;
+    const response = await fetch(`/api/add?src=${src}&dst=${dst}&name=logistic`, {
+        method: 'POST'
+    });
+
+    const text = await response.text();
+    log(text);
+    getPaths();
+}
+
+    async function getPaths() {
+        const k = document.getElementById('k').value;
+        const res = await fetch(`/api/paths?name=logistic&k=${k}`);
+        const paths = await res.json();
+        log(`Найдено путей: ${paths.length}`);
+        drawPaths(paths);
+    }
+
+    function drawPaths(paths) {
+
+        pathLines.forEach(l => map.removeLayer(l));
+        pathLines = [];
+
+        paths.forEach(path => {
+            const coords = [];
+            path.forEach(id => {
+                if (warehouseData[id]) coords.push(warehouseData[id].coords);
+            });
+
+            if (coords.length > 1) {
+                const line = L.polyline(coords, {
+                    color: '#1a73e8',
+                    weight: 5,
+                    opacity: 0.6
+                }).addTo(map);
+                pathLines.push(line);
+            }
+        });
+    }
+
+    function log(m) {
+        const out = document.getElementById('output');
+        out.innerText = `> ${m}\n` + out.innerText;
+    }
+</script>
 
 </body>
 </html>

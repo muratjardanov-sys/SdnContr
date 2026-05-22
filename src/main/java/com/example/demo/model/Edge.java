@@ -2,7 +2,8 @@ package com.example.demo.model;
 
 import jakarta.persistence.*;
 
-@Entity // Говорит Spring, что это таблица в БД
+@Entity
+@Table(name = "edges")
 public class Edge {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -10,17 +11,17 @@ public class Edge {
 
     private int source;
     private int target;
-    private String graphName; // Позволит хранить несколько разных графов
+    private String graphName;
 
-    // Конструкторы
     public Edge() {}
+
     public Edge(int source, int target, String graphName) {
         this.source = source;
         this.target = target;
         this.graphName = graphName;
     }
 
-    // Геттеры (важны для Spring!)
+    // Геттеры
     public int getSource() { return source; }
     public int getTarget() { return target; }
     public String getGraphName() { return graphName; }
