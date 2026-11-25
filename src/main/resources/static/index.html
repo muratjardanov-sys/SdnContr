@@ -2,123 +2,300 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Логистический Менеджер: Неориентированный граф</title>
+    <title>SDN-Контроллер: Многомерно-матричная маршрутизация (C++ OpenMP)</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
-        body { font-family: 'Segoe UI', sans-serif; margin: 0; display: flex; height: 100vh; }
-        .sidebar { width: 350px; background: white; border-right: 1px solid #ddd; padding: 20px; z-index: 1000; overflow-y: auto; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; display: flex; height: 100vh; background: #0f172a; color: #e2e8f0; }
+        .sidebar { width: 410px; background: #1e293b; border-right: 1px solid #334155; padding: 16px; z-index: 1000; overflow-y: auto; box-sizing: border-box; }
         #map { flex-grow: 1; height: 100%; }
-        .panel { border: 1px solid #eee; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-        input, button { width: 100%; padding: 10px; margin: 5px 0; border-radius: 4px; border: 1px solid #ccc; box-sizing: border-box; }
-        button { background: #1a73e8; color: white; border: none; cursor: pointer; font-weight: bold; }
-        button:hover { background: #1557b0; }
-        .active-mode { background: #34a853 !important; }
-        #output { font-size: 11px; background: #f8f9fa; padding: 10px; height: 150px; overflow-y: auto; border: 1px solid #eee; }
+        h2 { margin: 0 0 12px 0; font-size: 18px; color: #38bdf8; display: flex; align-items: center; gap: 8px; }
+        h3 { margin: 0 0 8px 0; font-size: 14px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; }
+        .panel { background: #0f172a; border: 1px solid #334155; padding: 12px; border-radius: 8px; margin-bottom: 14px; }
+        .row { display: flex; gap: 8px; margin-bottom: 6px; }
+        .row > div { flex: 1; }
+        label { font-size: 11px; color: #94a3b8; display: block; margin-bottom: 2px; }
+        input { width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #475569; background: #1e293b; color: #f8fafc; box-sizing: border-box; font-size: 13px; }
+        button { width: 100%; padding: 9px; margin-top: 6px; border-radius: 5px; border: none; cursor: pointer; font-weight: 600; font-size: 13px; transition: 0.15s; }
+        .btn-primary { background: #0284c7; color: white; }
+        .btn-primary:hover { background: #0369a1; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-success:hover { background: #059669; }
+        .btn-preset { background: #6366f1; color: white; margin-bottom: 6px; }
+        .btn-preset:hover { background: #4f46e5; }
+        .btn-danger { background: #ef4444; color: white; }
+        .active-mode { background: #f59e0b !important; color: #000 !important; }
+        .legend { font-size: 12px; line-height: 1.7; }
+        .badge { display: inline-block; width: 12px; height: 4px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
+        .stats-box { background: #1e293b; border-left: 4px solid #38bdf8; padding: 8px 10px; margin-top: 8px; font-size: 12px; border-radius: 4px; }
+        .path-card { padding: 8px; border-radius: 5px; margin-top: 6px; font-size: 12px; }
+        .card-primary { background: rgba(16, 185, 129, 0.15); border: 1px solid #10b981; }
+        .card-backup { background: rgba(245, 158, 11, 0.15); border: 1px solid #f59e0b; }
+        #output { font-family: Consolas, monospace; font-size: 11px; background: #090d16; color: #38bdf8; padding: 10px; height: 120px; overflow-y: auto; border: 1px solid #334155; border-radius: 6px; }
+        .node-marker { display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; font-weight: bold; font-size: 12px; color: white; border: 2px solid white; box-shadow: 0 2px 6px rgba(0,0,0,0.5); }
     </style>
 </head>
 <body>
 
 <div class="sidebar">
-    <h2>🚚 Управление сетью</h2>
+    <h2>🌐 SDN-Контроллер (АММ + C++)</h2>
 
     <div class="panel">
-        <h3>📍 Склады</h3>
-        <button id="addNodeBtn" onclick="toggleAddMode()">➕ Поставить склад на карту</button>
-        <p id="status" style="font-size: 12px; color: #666;"></p>
+        <h3>⚡ Быстрый стенд и топология</h3>
+        <button class="btn-preset" onclick="loadDemoTopology()">🚀 Загрузить эталонную сеть ЦОД (8 узлов)</button>
+        <div class="row">
+            <button id="addNodeBtn" class="btn-primary" onclick="toggleAddMode()">➕ Добавить узел</button>
+            <button class="btn-danger" onclick="resetNetwork()">🗑 Очистить</button>
+        </div>
+        <div id="status" style="font-size: 11px; color: #fbbf24; margin-top: 4px;">
+            💡 Кликните на существующий узел на карте, чтобы симулировать его отказ (аварию)!
+        </div>
     </div>
 
     <div class="panel">
-        <h3>🛤 Дороги (Связи)</h3>
-        <input type="number" id="src" placeholder="ID склада А">
-        <input type="number" id="dst" placeholder="ID склада Б">
-        <button onclick="addRoute()">Создать дорогу</button>
+        <h3>🔌 Добавить оптоволоконный канал</h3>
+        <div class="row">
+            <div><label>Узел А (ID)</label><input type="number" id="srcEdge" value="1"></div>
+            <div><label>Узел Б (ID)</label><input type="number" id="dstEdge" value="2"></div>
+        </div>
+        <div class="row">
+            <div><label>Задержка (мс)</label><input type="number" id="latencyEdge" value="12"></div>
+            <div><label>Канал (Гбит/с)</label><input type="number" id="bwEdge" value="40"></div>
+        </div>
+        <button class="btn-primary" onclick="addChannel()">Соединить узлы</button>
     </div>
 
     <div class="panel">
-        <h3>📊 Расчет маршрутов</h3>
-        <input type="number" id="k" value="3" placeholder="Длина пути k">
-        <button onclick="getPaths()" style="background: #34a853;">Найти пути</button>
+        <h3>🛡 Расчет отказоустойчивости (АММ)</h3>
+        <div class="row">
+            <div><label>Отправитель (Src)</label><input type="number" id="calcSrc" value="1"></div>
+            <div><label>Получатель (Dst)</label><input type="number" id="calcDst" value="8"></div>
+        </div>
+        <div class="row">
+            <div><label>Макс. хопов (k)</label><input type="number" id="calcK" value="5" min="1" max="10"></div>
+            <div><label>Мин. Гбит/с (QoS)</label><input type="number" id="calcBw" value="10"></div>
+        </div>
+        <button class="btn-success" onclick="analyzeRoutes()">Рассчитать матрицу путей (C++ OpenMP)</button>
+
+        <div class="legend" style="margin-top: 10px;">
+            <div><span class="badge" style="background:#10b981;"></span><b>Основной маршрут</b> (мин. пинг)</div>
+            <div><span class="badge" style="background:#f59e0b;"></span><b>Резервный маршрут</b> (100% независимый)</div>
+            <div><span class="badge" style="background:#38bdf8;"></span>Альтернативные пути из матрицы</div>
+        </div>
+
+        <div id="resultSummary"></div>
     </div>
 
-    <div id="output">Логи...</div>
+    <div id="output">Журнал SDN-контроллера готов...</div>
 </div>
 
 <div id="map"></div>
 
 <script>
-    const map = L.map('map').setView([49.5, 39.5], 6);
+    const map = L.map('map').setView([51.67, 39.20], 6);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
     let isAddMode = false;
-    let warehouseData = {};   // Данные: ID -> Координаты
-    let warehouseMarkers = {}; // Объекты маркеров на карте
-    let pathLines = [];       // Объекты линий на карте
+    let nodes = {};         // id -> { coords: [lat, lng], name: string }
+    let nodeMarkers = {};   // id -> L.marker
+    let failedNodes = new Set();
+    let baseLines = [];
+    let routeLines = [];
+    let currentEdges = [];
+
+    function createNodeIcon(id, isFailed) {
+        const bg = isFailed ? '#ef4444' : '#0284c7';
+        const label = isFailed ? '✖' : id;
+        return L.divIcon({
+            className: '',
+            html: `<div class="node-marker" style="background:${bg};">${label}</div>`,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16]
+        });
+    }
+
+    function registerNodeOnMap(id, lat, lng, title) {
+        nodes[id] = { coords: [lat, lng], name: title || `Маршрутизатор #${id}` };
+        if (nodeMarkers[id]) map.removeLayer(nodeMarkers[id]);
+
+        const marker = L.marker([lat, lng], { icon: createNodeIcon(id, failedNodes.has(Number(id))) })
+            .addTo(map)
+            .bindTooltip(`<b>[${id}] ${nodes[id].name}</b>`, { permanent: true, direction: 'top', offset: [0, -14] });
+
+        marker.on('click', () => toggleNodeFailure(Number(id)));
+        nodeMarkers[id] = marker;
+    }
+
+    function toggleNodeFailure(id) {
+        if (failedNodes.has(id)) {
+            failedNodes.delete(id);
+            log(`✅ Узел #${id} (${nodes[id].name}) восстановлен и введен в строй`);
+        } else {
+            failedNodes.add(id);
+            log(`🚨 АВАРИЯ: Узел #${id} (${nodes[id].name}) выведен из строя! Пересчет матрицы...`);
+        }
+        nodeMarkers[id].setIcon(createNodeIcon(id, failedNodes.has(id)));
+        analyzeRoutes();
+    }
+
     function toggleAddMode() {
         isAddMode = !isAddMode;
-        const btn = document.getElementById('addNodeBtn');
-        btn.classList.toggle('active-mode', isAddMode);
-        document.getElementById('status').innerText = isAddMode ? "Кликните на карту!" : "";
+        document.getElementById('addNodeBtn').classList.toggle('active-mode', isAddMode);
+        document.getElementById('status').innerText = isAddMode
+            ? "📍 Кликните в любую точку карты для размещения маршрутизатора"
+            : "💡 Кликните на узел на карте, чтобы симулировать его отказ!";
     }
+
     map.on('click', function(e) {
         if (!isAddMode) return;
-        const lat = e.latlng.lat.toFixed(6);
-        const lng = e.latlng.lng.toFixed(6);
-        const id = prompt(`Координаты: ${lat}, ${lng}\nВведите ID склада:`);
-
+        const id = Number(prompt("Введите числовой ID нового узла связи:", Object.keys(nodes).length + 1));
         if (id) {
-            warehouseData[id] = { coords: [lat, lng] };
-            const marker = L.marker([lat, lng])
-                .addTo(map)
-                .bindTooltip(`ID: ${id}`, { permanent: true, direction: 'top', offset: [0, -10] })
-                .bindPopup(`<b>Склад #${id}</b>`);
-
-            warehouseMarkers[id] = marker;
-            log(`Склад ${id} создан`);
+            const name = prompt("Название узла / Город:", `ЦОД-${id}`);
+            registerNodeOnMap(id, e.latlng.lat, e.latlng.lng, name);
+            log(`Добавлен узел #${id} (${name})`);
             toggleAddMode();
         }
     });
 
-    async function addRoute() {
-    const src = document.getElementById('src').value;
-    const dst = document.getElementById('dst').value;
-    const response = await fetch(`/api/add?src=${src}&dst=${dst}&name=logistic`, {
-        method: 'POST'
-    });
+    async function addChannel(srcVal, dstVal, latVal, bwVal, silent = false) {
+        const src = srcVal ?? document.getElementById('srcEdge').value;
+        const dst = dstVal ?? document.getElementById('dstEdge').value;
+        const lat = latVal ?? document.getElementById('latencyEdge').value;
+        const bw  = bwVal  ?? document.getElementById('bwEdge').value;
 
-    const text = await response.text();
-    log(text);
-    getPaths();
-}
-
-    async function getPaths() {
-        const k = document.getElementById('k').value;
-        const res = await fetch(`/api/paths?name=logistic&k=${k}`);
-        const paths = await res.json();
-        log(`Найдено путей: ${paths.length}`);
-        drawPaths(paths);
+        const res = await fetch(`/api/add?src=${src}&dst=${dst}&latency=${lat}&bandwidth=${bw}&name=telecom`, { method: 'POST' });
+        const txt = await res.text();
+        currentEdges.push({ src: Number(src), dst: Number(dst), latency: Number(lat), bandwidth: Number(bw) });
+        drawBaseTopology();
+        if (!silent) {
+            log(txt);
+            analyzeRoutes();
+        }
     }
 
-    function drawPaths(paths) {
-
-        pathLines.forEach(l => map.removeLayer(l));
-        pathLines = [];
-
-        paths.forEach(path => {
-            const coords = [];
-            path.forEach(id => {
-                if (warehouseData[id]) coords.push(warehouseData[id].coords);
-            });
-
-            if (coords.length > 1) {
-                const line = L.polyline(coords, {
-                    color: '#1a73e8',
-                    weight: 5,
-                    opacity: 0.6
-                }).addTo(map);
-                pathLines.push(line);
+    function drawBaseTopology() {
+        baseLines.forEach(l => map.removeLayer(l));
+        baseLines = [];
+        currentEdges.forEach(e => {
+            if (nodes[e.src] && nodes[e.dst]) {
+                const line = L.polyline([nodes[e.src].coords, nodes[e.dst].coords], {
+                    color: '#64748b', weight: 2, opacity: 0.5, dashArray: '4, 4'
+                }).addTo(map).bindTooltip(`${e.latency} мс | ${e.bandwidth} Гбит/с`);
+                baseLines.push(line);
             }
         });
+    }
+
+    async function analyzeRoutes() {
+        const src = document.getElementById('calcSrc').value;
+        const dst = document.getElementById('calcDst').value;
+        const k   = document.getElementById('calcK').value;
+        const bw  = document.getElementById('calcBw').value;
+        const failedParam = Array.from(failedNodes).join(',');
+
+        const url = `/api/analyze?name=telecom&src=${src}&dst=${dst}&k=${k}&minBw=${bw}&failed=${failedParam}`;
+        const res = await fetch(url);
+        const data = await res.json();
+
+        renderRoutesOnMap(data);
+        renderSummary(data);
+        log(`[${data.engine}] Время: ${data.executionTimeMs} мс | Найдено путей: ${data.totalPathsFound}`);
+    }
+
+    function renderRoutesOnMap(data) {
+        routeLines.forEach(l => map.removeLayer(l));
+        routeLines = [];
+
+        if (!data.allPaths) return;
+
+        // 1. Отрисовка всех альтернативных путей из многомерной матрицы (тонкие голубые)
+        data.allPaths.forEach(p => {
+            const coords = p.nodes.map(id => nodes[id]?.coords).filter(Boolean);
+            if (coords.length > 1) {
+                routeLines.push(L.polyline(coords, { color: '#38bdf8', weight: 3, opacity: 0.25 }).addTo(map));
+            }
+        });
+
+        // 2. Отрисовка независимого резервного маршрута (оранжевый пунктир)
+        if (data.backupPath) {
+            const coords = data.backupPath.nodes.map(id => nodes[id]?.coords).filter(Boolean);
+            routeLines.push(L.polyline(coords, { color: '#f59e0b', weight: 6, opacity: 0.9, dashArray: '10, 8' }).addTo(map));
+        }
+
+        // 3. Отрисовка основного маршрута (ярко-зеленый)
+        if (data.primaryPath) {
+            const coords = data.primaryPath.nodes.map(id => nodes[id]?.coords).filter(Boolean);
+            routeLines.push(L.polyline(coords, { color: '#10b981', weight: 6, opacity: 0.95 }).addTo(map));
+        }
+    }
+
+    function renderSummary(data) {
+        const box = document.getElementById('resultSummary');
+        let html = `<div class="stats-box">
+            ⚙️ Ядро: <b>${data.engine}</b><br>
+            ⏱ Время свертки матриц: <b>${data.executionTimeMs} мс</b><br>
+            📊 Допустимых путей в матрице: <b>${data.totalPathsFound}</b>
+        </div>`;
+
+        if (data.primaryPath) {
+            html += `<div class="path-card card-primary">
+                🟢 <b>Основной:</b> ${data.primaryPath.nodes.join(' → ')}<br>
+                Задержка: <b>${data.primaryPath.latency} мс</b> | Канал: <b>${data.primaryPath.bandwidth} Гбит/с</b>
+            </div>`;
+        } else {
+            html += `<div class="path-card" style="background:rgba(239,68,68,0.2);border:1px solid #ef4444;">
+                ❌ <b>Связь потеряна!</b> Нет доступных путей с заданным QoS.
+            </div>`;
+        }
+
+        if (data.backupPath) {
+            html += `<div class="path-card card-backup">
+                🟠 <b>Резервный (Node-Disjoint):</b> ${data.backupPath.nodes.join(' → ')}<br>
+                Задержка: <b>${data.backupPath.latency} мс</b> | Канал: <b>${data.backupPath.bandwidth} Гбит/с</b>
+            </div>`;
+        } else if (data.primaryPath) {
+            html += `<div class="path-card" style="color:#94a3b8; border:1px dashed #475569;">
+                ⚠️ Полностью независимый резервный путь не найден (все пути имеют общие транзитные узлы).
+            </div>`;
+        }
+        box.innerHTML = html;
+    }
+
+    async function resetNetwork() {
+        await fetch('/api/reset?name=telecom', { method: 'POST' });
+        Object.values(nodeMarkers).forEach(m => map.removeLayer(m));
+        baseLines.forEach(l => map.removeLayer(l));
+        routeLines.forEach(l => map.removeLayer(l));
+        nodes = {}; nodeMarkers = {}; failedNodes.clear(); currentEdges = [];
+        document.getElementById('resultSummary').innerHTML = '';
+        log("Сеть полностью очищена.");
+    }
+
+    async function loadDemoTopology() {
+        await resetNetwork();
+        const presetNodes = [
+            [1, 55.7558, 37.6173, "Москва (ЦОД-1)"],
+            [2, 54.6292, 39.7368, "Рязань"],
+            [3, 52.6088, 39.5992, "Липецк"],
+            [4, 51.6720, 39.1843, "Воронеж (Хаб)"],
+            [5, 51.7373, 36.1873, "Курск"],
+            [6, 50.5954, 36.5872, "Белгород"],
+            [7, 52.7212, 41.4523, "Тамбов"],
+            [8, 47.2357, 39.7015, "Ростов-на-Дону (ЦОД-2)"]
+        ];
+        presetNodes.forEach(([id, lat, lng, name]) => registerNodeOnMap(id, lat, lng, name));
+
+        const presetEdges = [
+            [1, 3, 14, 100], [3, 4, 8, 100],  [4, 8, 18, 100], // Быстрая магистраль через Липецк и Воронеж
+            [1, 5, 16, 40],  [5, 6, 9, 40],   [6, 8, 22, 40],  // Западный обход через Курск и Белгород
+            [1, 2, 10, 40],  [2, 7, 15, 40],  [7, 8, 28, 40],  // Восточный обход через Рязань и Тамбов
+            [3, 5, 11, 20],  [4, 7, 12, 40],  [4, 6, 13, 20]   // Поперечные перемычки
+        ];
+        for (const [u, v, lat, bw] of presetEdges) {
+            await addChannel(u, v, lat, bw, true);
+        }
+        log("✅ Эталонная магистральная сеть (8 узлов, 12 оптоволоконных линий) загружена.");
+        await analyzeRoutes();
     }
 
     function log(m) {
@@ -126,6 +303,5 @@
         out.innerText = `> ${m}\n` + out.innerText;
     }
 </script>
-
 </body>
 </html>

@@ -1,7 +1,10 @@
 package com.example.demo.controller;
 
+import com.example.demo.model.Edge;
 import com.example.demo.service.GraphService;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
 
 @RestController
@@ -15,13 +18,35 @@ public class GraphController {
     }
 
     @PostMapping("/add")
-    public String addEdge(@RequestParam int src, @RequestParam int dst, @RequestParam String name) {
-        service.addEdge(src, dst, name);
-        return "Ребро [" + src + " -> " + dst + "] добавлено в граф '" + name + "'";
+    public String addEdge(
+            @RequestParam int src,
+            @RequestParam int dst,
+            @RequestParam(defaultValue = "10") int latency,
+            @RequestParam(defaultValue = "40") int bandwidth,
+            @RequestParam(defaultValue = "telecom") String name) {
+        service.addEdge(src, dst, latency, bandwidth, name);
+        return "Канал [" + src + " <-> " + dst + "] (" + latency + " мс, " + bandwidth + " Гбит/с) добавлен";
     }
 
-    @GetMapping("/paths")
-    public List<List<Integer>> getPaths(@RequestParam String name, @RequestParam int k) {
-        return service.findPaths(name, k);
+    @PostMapping("/reset")
+    public String resetGraph(@RequestParam(defaultValue = "telecom") String name) {
+        service.clearGraph(name);
+        return "Топология сети очищена";
+    }
+
+    @GetMapping("/edges")
+    public List<Edge> getEdges(@RequestParam(defaultValue = "telecom") String name) {
+        return service.getEdges(name);
+    }
+
+    @GetMapping(value = "/analyze", produces = MediaType.APPLICATION_JSON_VALUE)
+    public String analyzeNetwork(
+            @RequestParam(defaultValue = "telecom") String name,
+            @RequestParam int src,
+            @RequestParam int dst,
+            @RequestParam(defaultValue = "5") int k,
+            @RequestParam(defaultValue = "10") int minBw,
+            @RequestParam(required = false) List<Integer> failed) {
+        return service.analyzeWithCppEngine(name, src, dst, k, minBw, failed);
     }
 }
